@@ -1,11 +1,11 @@
-#alertbox 
+# alertbox 
 a replacement for the alert instruction which is compatible with PLB Unix, PLB Console, PLB Windows, and PLB Web Server.
 
-##Usage
+## Usage
 
-```call alertboxShow giving result using alertType,alertMessage,alertTitle,param0,param1,param2,param3```
+```call alertboxShow [giving result] {using alertType,alertMessage}[,{alertTitle}][,{param0}][,{param1}][,{param2}][,{param3}]```
 
-Where
+Where:
 
 - result is a form or integer value giving the numeric result of the response, consistent with the ALERT instruction
 - alertType is a numeric value consistent with the ALERT instruction, or one of: STOP, PLAIN, CAUTION, NOTE
