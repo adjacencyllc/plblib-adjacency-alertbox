@@ -52,6 +52,31 @@
 //      requires appropriate settings in the screen definition file for some runtimes
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ALERT_ICON_STOP const "16"
+ALERT_ICON_QUESTION const "32"
+ALERT_ICON_EXCLAMATION const "48"
+ALERT_ICON_INFORMATION const "64"
+
+ALERT_BUTTON_OK const "0"
+ALERT_BUTTON_YESNOCANCEL const "3"
+
+ALERT_ID_OK const "1"
+ALERT_ID_CANCEL const "2"
+ALERT_ID_ABORT const "3"
+ALERT_ID_RETRY const "4"
+ALERT_ID_IGNORE const "5"
+ALERT_ID_YES const "6"
+ALERT_ID_NO const "7"
+ALERT_ID_NONE const "0"
+
+ALERT_RUNTIME_CONSOLE const "0"
+ALERT_RUNTIME_GUI const "1"
+ALERT_RUNTIME_BROWSER const "2"
+
+ALERT_CRLF init 0x7f
+ALERT_CONSOLE_CRLF init 0x0d,0x0a
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
+
 alertbox function
 alertType var @             // REQUIRED: a numeric alert type, or a string containing: STOP, PLAIN, CAUTION, NOTE
 alertMessage dim 512        // REQUIRED: the string to display in the alert
@@ -72,9 +97,11 @@ alertResult integer 4       // result of the alert, consistent with the ALERT in
 
     // convert alert types: CAUTION, NOTE, PLAN, STOP into their numeric values
     type alertType into variableType
-    if (variableType = 32 or variableType = 288)
+    if (variableType = 32 or variableType = 288)    // indicates a DIM or literal
+        // sleight of hand for moving a VAR ptr into a local DIM variable
         moveaddr alertType to pWorkString
         move pWorkString to alertTypeString    
+
         uppercase alertTypeString
         switch alertTypeString
         case "STOP"
@@ -86,10 +113,10 @@ alertResult integer 4       // result of the alert, consistent with the ALERT in
         default // "PLAIN" or invalid
             calc alertTypeNumeric = (ALERT_ICON_QUESTION + ALERT_BUTTON_YESNOCANCEL)
         endswitch    
-    elseif (variableType = 16 or variableType = 272)
+    elseif (variableType = 16 or variableType = 272)    // indicates a FORM or numeric literal
         moveaddr alertType to pWorkForm
         move pWorkForm to alertTypeNumeric
-    else
+    else                                                // assume an integer and allow a FORMAT error to happen if its some other type
         moveaddr alertType to pWorkInteger
         move pWorkInteger to alertTypeNumeric
     endif
@@ -117,6 +144,7 @@ alertResult integer 4       // result of the alert, consistent with the ALERT in
     functionend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 
+// helper function that does an ALERT but converts 0x7f linebreaks into <br> for a web browser
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 doBrowserAlert lfunction
 alertTypeNumeric integer 4
@@ -139,6 +167,7 @@ alertResult integer 1
     functionend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 
+// all that code, and all we ended up doing was wrapping the ALERT instruction!!
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 doGuiAlert lfunction
 alertTypeNumeric integer 4
@@ -155,45 +184,26 @@ alertResult integer 1
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 doConsoleAlert lfunction
-alertTypeNumeric integer 4
-alertTitle dim 80
-alertMessage dim 512
+alertTypeNumeric integer 4          // numeric alert type 
+alertTitle dim 80                   // title of alert
+alertMessage dim 512                // message to be displayed (will word wrap if needed)
     entry
-alertIconString dim 1
-testValue integer 4
-alertKeyinResponse dim 1
-showButtonOK integer 1
-showButtonAbort integer 1
-showButtonIgnore integer 1
-showButtonRetry integer 1
-showButtonCancel integer 1
-showButtonYes integer 1
-showButtonNo integer 1
-alertButtonMask integer 1,"7"
-validResponses dim 10
-screenSize integer 4
-screenBuffer dim ^
+alertIconString dim 1               // "Icon" to display, "i", "!", "X", or "?"
+alertButtonMask integer 1,"7"       // will collect the last 4 BITS of the alert type, which contain button flags
+showButtonOK integer 1              // flag to indicate that we'll show the OK button
+showButtonAbort integer 1           // flag to indicate that we'll show the Abort button
+showButtonIgnore integer 1          // flag to indicate that we'll show the Ignore button
+showButtonRetry integer 1           // flag to indicate that we'll show the Retry button
+showButtonCancel integer 1          // flag to indicate that we'll show the Cancel button
+showButtonYes integer 1             // flag to indicate that we'll show the Yes button
+showButtonNo integer 1              // flag to indicate that we'll show the No button
+validResponses dim 7                // which characters are valid in the keyin statement (based on button visibility)
+alertKeyinResponse dim 1            // key pressed during keyin loop
+screenSize integer 4                // how big does our screen buffer need to be to save off the whole screen
+screenBuffer dim ^                  // buffer that holds our screen info until we're ready to restore it
 
     // set the alert icon
-    move "!" to alertIconString
-
-    move alertTypeNumeric to testValue
-    and ALERT_ICON_STOP with testValue
-    if (testValue)
-        move "X" to alertIconString
-    endif
-
-    move alertTypeNumeric to testValue
-    and ALERT_ICON_QUESTION with testValue
-    if (testValue)
-        move "?" to alertIconString
-    endif
-
-    move alertTypeNumeric to testValue
-    and ALERT_ICON_INFORMATION with testValue
-    if (testValue)
-        move "i" to alertIconString
-    endif
+    call getConsoleAlertIcon using alertTypeNumeric
 
     // make sure we only take the value of the alert buttons between 0 and 7    
     and alertTypeNumeric into alertButtonMask
@@ -244,37 +254,37 @@ screenBuffer dim ^
 
     // choose which buttons to display and set the responses we will allow
     if (showButtonOK)            
-        display " ",*boldon,"[   ",*revon,"O",*revoff,"K   ]",*boldoff," "; 
+        display " ",*revon,"[   OK   ]",*revoff," "; 
         append "O" to validResponses
     endif
 
     if (showButtonYes)            
-        display " ",*boldon,"[   ",*revon,"Y",*revoff,"es  ]",*boldoff," "; 
+        display " ",*revon,"[   Yes  ]",*revoff," "; 
         append "Y" to validResponses
     endif
 
     if (showButtonNo)            
-        display " ",*boldon,"[   ",*revon,"N",*revoff,"o   ]",*boldoff," "; 
+        display " ",*revon,"[   No   ]",*revoff," "; 
         append "N" to validResponses
     endif
 
     if (showButtonAbort)            
-        display " ",*boldon,"[  ",*revon,"A",*revoff,"bort ]",*boldoff," "; 
+        display " ",*revon,"[  Abort ]",*revoff," "; 
         append "A" to validResponses
     endif
 
     if (showButtonRetry)            
-        display " ",*boldon,"[  ",*revon,"R",*revoff,"etry ]",*boldoff," "; 
+        display " ",*revon,"[  Retry ]",*revoff," "; 
         append "R" to validResponses
     endif
 
     if (showButtonIgnore)            
-        display " ",*boldon,"[ ",*revon,"I",*revoff,"gnore]",*boldoff," "; 
+        display " ",*revon,"[ Ignore]",*revoff," "; 
         append "I" to validResponses
     endif
 
     if (showButtonCancel)            
-        display " ",*boldon,"[ ",*revon,"C",*revoff,"ancel ]",*boldoff," "; 
+        display " ",*revon,"[ Cancel ]",*revoff," "; 
         append "C" to validResponses
     endif
 
@@ -283,7 +293,14 @@ screenBuffer dim ^
 
     // make the user press one of the valid responses
     loop
-        keyin *hd,*+,alertKeyinResponse;
+        move validResponses to alertKeyinResponse       // makes the first valid response the default
+        keyin *hd,*+,*rv,alertKeyinResponse;
+        if esc
+            // make the last valid option selected if ESC is pressed
+            endset validResponses
+            move validResponses to alertKeyinResponse
+            reset validResponses
+        endif
         uppercase alertKeyinResponse
         scan alertKeyinResponse in validResponses
         break if equal
@@ -294,6 +311,7 @@ screenBuffer dim ^
     display *restsw;
     scrnrestore screenBuffer
 
+    // return the code for the option selected
     switch alertKeyinResponse
     case "O"
         return using ALERT_ID_OK
@@ -316,6 +334,7 @@ screenBuffer dim ^
     functionend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 
+// look at client first, then interpreter runtime and determine if environment is a browser, GUI, or console
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 getRuntimeType lfunction
     entry
@@ -342,14 +361,16 @@ clientVersion dim 5
     functionend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 
+// replaces ^^ with 0x7f, and replaces ^0, ^1, ^2, ^3 with parameter values, as per PARAMTEXT instruction
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
 replaceParamText lfunction
-pAlertString dim ^
-params dim 260[0..3]
+pAlertString dim ^                  // the string to be manipulated
+replacementString dim 260[0..3]     // optional string replacements for ^0, ^1, ^2, and ^3
     entry
 index form 1
 scanString dim 2
 
+    // replace ^^ with 0x7f (convenience not included with original PARAMTEXT implementation)
     loop
         scan "^^" in pAlertString
         until not equal
@@ -357,15 +378,44 @@ scanString dim 2
     repeat
     reset pAlertString
 
+    // replace ^0 - ^3 with text from the input parameters
     for index from 0 to 3
         pack scanString from "^",index
         loop
             scan scanString in pAlertString
             until not equal
-            splice params[index] in pAlertString with 2
+            splice replacementString[index] in pAlertString with 2
         repeat
         reset pAlertString
     repeat
 
+    functionend
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
+getConsoleAlertIcon lfunction
+alertType integer 1
+    entry
+alertIconIndicator integer 1,"0b01110000"   // mask will only collect the icon bits from the alert type
+alertIconString dim 1
+
+    debug
+    and alertType into alertIconIndicator
+
+    switch alertIconIndicator
+
+    case ALERT_ICON_STOP
+        move "X" to alertIconString
+    case ALERT_ICON_QUESTION
+        move "?" to alertIconString
+    case ALERT_ICON_EXCLAMATION
+        move "!" to alertIconString
+    case ALERT_ICON_INFORMATION
+        move "i" to alertIconString
+    default
+        move "X" to alertIconString
+    endswitch
+
+    return using alertIconString
     functionend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
